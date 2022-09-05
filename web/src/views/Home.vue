@@ -18,15 +18,15 @@
                 <compose @post-success="onPostSuccess" />
             </n-list-item>
 
-            <div v-if="loading" class="skeleton-wrap">
+            <div v-if="isLoading" class="skeleton-wrap">
                 <post-skeleton :num="pageSize" />
             </div>
             <div v-else>
-                <div class="empty-wrap" v-if="list.length === 0">
+                <div class="empty-wrap" v-if="state.list.length === 0">
                     <n-empty size="large" description="暂无数据" />
                 </div>
 
-                <n-list-item v-for="post in list" :key="post.id">
+                <n-list-item v-for="post in state.list" :key="post.id">
                     <post-item :post="post" />
                 </n-list-item>
             </div>
@@ -35,20 +35,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useStore } from 'vuex';
 import { useRoute, useRouter } from 'vue-router';
 import { getPosts } from '@/api/post';
+import { useAsyncState } from '@vueuse/core'
 
 const store = useStore();
 const route = useRoute();
 const router = useRouter();
-
-const loading = ref(false);
-const list = ref<any[]>([]);
 const page = ref(+(route.query.p as string) || 1);
 const pageSize = ref(20);
-const totalPage = ref(0);
 const title = computed(() => {
     let t = '泡泡广场';
 
@@ -63,26 +60,27 @@ const title = computed(() => {
     return t;
 });
 
-const loadPosts = () => {
-    loading.value = true;
-    getPosts({
-        query: route.query.q ? decodeURIComponent(route.query.q as string) : null,
-        type: route.query.t as string,
-        page: page.value,
-        page_size: pageSize.value,
-    })
-        .then((rsp) => {
-            loading.value = false;
-            list.value = rsp.list;
-            totalPage.value = Math.ceil(rsp.pager.total_rows / pageSize.value);
+const { state, isReady, isLoading, execute } = useAsyncState((args) => getPosts(args)
+, { list: [], pager: { page: 1, page_size: 20, total_rows: 0} }, { resetOnExecute: false })
 
-            window.scrollTo(0, 0);
-        })
-        .catch((err) => {
-            loading.value = false;
-        });
-};
+const onExecute = () => {
+	execute(
+		500,
+		{
+			query: route.query.q ? decodeURIComponent(route.query.q as string) : null,
+			type: route.query.t as string,
+			page: page.value,
+			page_size: pageSize.value,
+		}
+	)
+}
+onExecute()
 
+const totalPage = computed(() => {
+	return Math.ceil(state.value?.pager?.total_rows / pageSize.value);
+})
+
+// 后面在改
 const onPostSuccess = (post: Item.PostProps) => {
     // 如果不在第一页，需要跳转到详情页面
     if (page.value != 1) {
@@ -94,26 +92,26 @@ const onPostSuccess = (post: Item.PostProps) => {
         });
         return;
     }
-    
+
     // 如果实在第一页，就地插入新推文到文章列表中
     let items = [];
-    let length = list.value.length;
+    let length = state.value.list.length;
     if (length == pageSize.value) {
         length--;
     }
     var i = 0;
     for (;i < length; i++) {
-        let item: Item.PostProps = list.value[i];
+        let item: Item.PostProps = state.value.list[i];
         if (!item.is_top) {
             break;
         }
-        items.push(item);  
+        items.push(item);
     }
     items.push(post);
     for (;i < length; i++) {
-        items.push(list.value[i]);
+        items.push(state.value.list[i]);
     }
-    list.value = items;
+    state.value.list = items;
 };
 
 const updatePage = (p: number) => {
@@ -126,9 +124,6 @@ const updatePage = (p: number) => {
     });
 };
 
-onMounted(() => {
-    loadPosts();
-});
 watch(
     () => ({
         path: route.path,
@@ -136,10 +131,11 @@ watch(
         refresh: store.state.refresh,
     }),
     (to, from) => {
+		console.log("watch", to, from)
         if (to.refresh !== from.refresh) {
             page.value = +(route.query.p as string) || 1;
             setTimeout(() => {
-                loadPosts();
+	            onExecute()
             }, 0);
             return;
         }
@@ -147,7 +143,7 @@ watch(
             page.value = +(route.query.p as string) || 1;
 
             setTimeout(() => {
-                loadPosts();
+	            onExecute()
             }, 0);
         }
     }
