@@ -7,25 +7,16 @@
                 <n-tab-pane name="hot" tab="热门" />
                 <n-tab-pane name="new" tab="最新" />
             </n-tabs>
-            <n-spin :show="loading">
+            <n-spin :show="isLoading">
                 <n-space>
-                    <n-tag
-                        class="tag-item"
-                        type="success"
-                        round
-                        v-for="tag in tags"
-                        :key="tag.id"
-                    >
-                        <router-link
-                            class="hash-link"
-                            :to="{
-                                name: 'home',
-                                query: {
-                                    q: tag.tag,
-                                    t: 'tag',
-                                },
-                            }"
-                        >
+                    <n-tag class="tag-item" type="success" round v-for="tag in state" :key="tag.id">
+                        <router-link class="hash-link" :to="{
+                            name: 'home',
+                            query: {
+                                q: tag.tag,
+                                t: 'tag',
+                            },
+                        }">
                             #{{ tag.tag }}
                         </router-link>
                         <span class="tag-hot">({{ tag.quote_num }})</span>
@@ -40,39 +31,40 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref } from 'vue';
 import { getTags } from '@/api/post';
-
-const tags = ref<Item.TagProps[]>([]);
+import { useAsyncState } from '@vueuse/core'
 const tagType = ref<"hot" | "new">('hot');
-const loading = ref(false);
 
-const loadTags = () => {
-    loading.value = true;
-    getTags({
-        type: tagType.value,
-        num: 50,
-    })
-        .then((res) => {
-            tags.value = res;
-            loading.value = false;
-        })
-        .catch((err) => {
-            loading.value = false;
-        });
-};
+const { isLoading, state, execute } = useAsyncState(
+    (args) => getTags(args),
+    [],
+    {
+        delay: 500,
+        resetOnExecute: false
+    }
+)
+const onExecute = () => {
+    execute(
+        500,
+        {
+            type: tagType.value,
+            num: 50,
+        }
+    )
+}
+onExecute()
+
 const changeTab = (tab: "hot" | "new") => {
     tagType.value = tab;
-    loadTags();
+    onExecute()
 };
-onMounted(() => {
-    loadTags();
-});
 </script>
 
 <style lang="less" scoped>
 .tags-wrap {
     padding: 20px;
+
     .tag-item {
         .tag-hot {
             margin-left: 12px;
