@@ -37,28 +37,15 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import { useStore } from 'vuex';
-import { useRoute, useRouter } from 'vue-router';
 import { getPosts } from '@/api/post';
 import { useAsyncState } from '@vueuse/core'
+import { routes, title } from "../utils";
 
 const store = useStore();
-const route = useRoute();
-const router = useRouter();
+const { route, router } = routes()
+
 const page = ref(+(route.query.p as string) || 1);
 const pageSize = ref(20);
-const title = computed(() => {
-    let t = '泡泡广场';
-
-    if (route.query && route.query.q) {
-        if (route.query.t && route.query.t === 'tag') {
-            t = '#' + decodeURIComponent(route.query.q as string);
-        } else {
-            t = '搜索: ' + decodeURIComponent(route.query.q as string);
-        }
-    }
-
-    return t;
-});
 
 const { state, isReady, isLoading, execute } = useAsyncState((args) => getPosts(args)
 , { list: [], pager: { page: 1, page_size: 20, total_rows: 0} }, { resetOnExecute: false })
